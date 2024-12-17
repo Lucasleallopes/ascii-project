@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Viewport para dispositivos móveis -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Spinning ASCII Object</title>
+    <title>AsciiVerse</title>
     <style>
         html, body {
             margin: 0;
             padding: 0;
             height: 100%;
+            overflow: hidden;
         }
 
         body {
@@ -54,7 +54,6 @@
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
-            background: rgba(0,0,0,0.5);
             padding: 10px;
             justify-content: center;
         }
@@ -82,6 +81,21 @@
             #controls input[type="range"] {
                 width: 100px;
             }
+        }
+
+        #author {
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'Courier New', Courier, monospace;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        body.light-mode #author {
+            color: rgba(0, 0, 0, 0.7);
+        }
+
+        #asciiContainer, canvas {
+            overflow: hidden;
         }
 
     </style>
@@ -116,8 +130,77 @@
             <button id="darkLightButton">Dark/Light Mode</button>
         </div>
     </div>
-
+    <div id="author">@Lucasleallopes</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
+
+         // Criação do elemento para o Three.js renderizar
+    const particlesContainer = document.createElement('div');
+    particlesContainer.style.position = 'absolute';
+    particlesContainer.style.top = '0';
+    particlesContainer.style.left = '0';
+    particlesContainer.style.width = '100%';
+    particlesContainer.style.height = '100%';
+    particlesContainer.style.zIndex = '-1'; // Mantém atrás do ASCII canvas
+    document.getElementById('asciiContainer').appendChild(particlesContainer);
+
+    // Configuração do Three.js para partículas
+    let scene, camera, renderer, particles;
+
+    function initParticles() {
+        // Cena
+        scene = new THREE.Scene();
+
+        // Câmera
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.position.z = 100;
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ alpha: true }); // Fundo transparente
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        particlesContainer.appendChild(renderer.domElement);
+
+        // Geometria das partículas
+        const particleCount = 300;
+        const geometry = new THREE.BufferGeometry();
+        const positions = [];
+        for (let i = 0; i < particleCount; i++) {
+            const x = (Math.random() - 0.5) * 400;
+            const y = (Math.random() - 0.5) * 400;
+            const z = (Math.random() - 0.5) * 400;
+            positions.push(x, y, z);
+        }
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+        // Material
+        const material = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 1.5,
+            transparent: true,
+        });
+
+        // Partículas
+        particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        animateParticles();
+    }
+
+    function animateParticles() {
+        requestAnimationFrame(animateParticles);
+        particles.rotation.y += 0.001; // Suave rotação
+        renderer.render(scene, camera);
+    }
+
+    // Ajuste do tamanho da tela ao redimensionar
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Inicializa as partículas
+    initParticles();
         const canvas = document.getElementById('asciiCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -181,7 +264,7 @@
             cubePoints = [];
             const cubeSize = 10;
             const half = cubeSize / 2;
-            const cubeDetail = 20;
+            const cubeDetail = 14;
             for (let i = 0; i <= cubeDetail; i++) {
                 for (let j = 0; j <= cubeDetail; j++) {
                     for (let k = 0; k <= cubeDetail; k++) {
@@ -461,6 +544,82 @@
             }
             resetToShape();
         });
+
+        canvas.addEventListener('touchstart', (event) => {
+            // Prevent default touch behavior to prevent scrolling while interacting
+            event.preventDefault();
+            
+            // Support multi-touch for zooming
+            if (event.touches.length === 2) {
+                // Pinch-to-zoom
+                const touch1 = event.touches[0];
+                const touch2 = event.touches[1];
+                const initialDistance = Math.hypot(
+                    touch1.pageX - touch2.pageX, 
+                    touch1.pageY - touch2.pageY
+                );
+                
+                // Store initial zoom for comparison
+                canvas.initialZoom = zoom;
+                
+                // Function to handle ongoing pinch zoom
+                const handlePinchZoom = (zoomEvent) => {
+                    if (zoomEvent.touches.length === 2) {
+                        const newTouch1 = zoomEvent.touches[0];
+                        const newTouch2 = zoomEvent.touches[1];
+                        const newDistance = Math.hypot(
+                            newTouch1.pageX - newTouch2.pageX, 
+                            newTouch1.pageY - newTouch2.pageY
+                        );
+                        
+                        // Calculate zoom factor
+                        const zoomFactor = newDistance / initialDistance;
+                        zoom = canvas.initialZoom * zoomFactor;
+                        
+                        // Limit zoom range
+                        zoom = Math.min(Math.max(zoom, 100), 1000);
+                        renderScene();
+                    }
+                };
+                
+                // Add move and end listeners for pinch zoom
+                canvas.addEventListener('touchmove', handlePinchZoom, { passive: false });
+                canvas.addEventListener('touchend', () => {
+                    canvas.removeEventListener('touchmove', handlePinchZoom);
+                }, { passive: false });
+            } else if (event.touches.length === 1) {
+                // Single touch for rotation
+                isDragging = true;
+                const touch = event.touches[0];
+                lastMouseX = touch.clientX;
+                lastMouseY = touch.clientY;
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchmove', (event) => {
+            // Prevent default touch behavior
+            event.preventDefault();
+            
+            if (event.touches.length === 1 && isDragging) {
+                const touch = event.touches[0];
+                const deltaX = touch.clientX - lastMouseX;
+                const deltaY = touch.clientY - lastMouseY;
+                
+                // Adjust rotation sensitivity for touch
+                angleX += deltaY * 0.02;
+                angleY += deltaX * 0.02;
+                
+                lastMouseX = touch.clientX;
+                lastMouseY = touch.clientY;
+                
+                renderScene();
+            }
+        }, { passive: false });
+        
+        canvas.addEventListener('touchend', (event) => {
+            // Reset dragging state
+            isDragging = false;
+        }, { passive: false });
 
         generateSpherePoints();
         generateCubePoints();
