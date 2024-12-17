@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Viewport para dispositivos móveis -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Spinning ASCII Object</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        body {
+            background-color: #000000;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        body.light-mode {
+            background-color: #ffffff;
+            color: black;
+        }
+
+        /* Container principal que segura o canvas e os controles */
+        #container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Canvas ocupa o espaço disponível (exceto o ocupado pelos controles) */
+        #asciiContainer {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Controles sempre no final */
+        #controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            justify-content: center;
+        }
+
+        #controls input[type="range"] {
+            width: 150px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* Responsividade para telas menores */
+        @media (max-width: 600px) {
+            #controls {
+                gap: 5px;
+            }
+
+            #controls button,
+            #controls label,
+            #controls select {
+                font-size: 0.9rem;
+            }
+
+            #controls input[type="range"] {
+                width: 100px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="asciiContainer">
+            <canvas id="asciiCanvas"></canvas>
+        </div>
+        <div id="controls">
+            <button id="pauseButton">Pause</button>
+            <button id="resumeButton" disabled>Resume</button>
+            <label for="directionSelect">Direction:</label>
+            <select id="directionSelect">
+                <option value="right" selected>Right</option>
+                <option value="left">Left</option>
+            </select>
+
+            <label for="shapeSelect">Shape:</label>
+            <select id="shapeSelect">
+                <option value="sphere" selected>Sphere</option>
+                <option value="cube">Cube</option>
+            </select>
+
+            <label>
+                Speed:
+                <input id="speedSlider" type="range" min="0.5" max="5" step="0.1" value="1">
+            </label>
+            <button id="importButton">Import STL</button>
+            <input type="file" id="fileInput" accept=".stl" />
+            <button id="resetButton">Reset</button>
+            <button id="darkLightButton">Dark/Light Mode</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('asciiCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const pauseButton = document.getElementById('pauseButton');
+        const resumeButton = document.getElementById('resumeButton');
+        const speedSlider = document.getElementById('speedSlider');
+        const importButton = document.getElementById('importButton');
+        const fileInput = document.getElementById('fileInput');
+        const resetButton = document.getElementById('resetButton');
+        const darkLightButton = document.getElementById('darkLightButton');
+        const directionSelect = document.getElementById('directionSelect');
+        const shapeSelect = document.getElementById('shapeSelect');
+
+        let rotationSpeed = 1;
+        let isPaused = false;
+
+        const initialRotationSpeed = 1;
+        const initialZoom = 300;
+        let angleX = 0;
+        let angleY = 0;
+        let angleZ = 0;
+        let zoom = initialZoom;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        let isLightMode = false; // modo inicial = dark mode
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight - document.getElementById('controls').offsetHeight;
+
+        const characters = ['.', ':', '-', '=', '+', '*', '#', '%', '@'];
+
+        let spherePoints = [];
+        let cubePoints = [];
+        let modelPoints = [];
+        let useModel = false; 
+        let currentShape = 'sphere';
+
+        const sphereRadius = 10; 
+        const detail = 40; 
+        let maxModelRadius = 10;
+
+        let rotationMode = 'right';
+
+        function generateSpherePoints() {
+            spherePoints = [];
+            for (let i = 0; i <= detail; i++) {
+                const theta = (i / detail) * Math.PI; // Latitude
+                for (let j = 0; j < detail * 2; j++) {
+                    const phi = (j / (detail * 2)) * 2 * Math.PI; // Longitude
+                    const x = sphereRadius * Math.sin(theta) * Math.cos(phi);
+                    const y = sphereRadius * Math.sin(theta) * Math.sin(phi);
+                    const z = sphereRadius * Math.cos(theta);
+                    spherePoints.push({ x, y, z });
+                }
+            }
+        }
+
+        function generateCubePoints() {
+            cubePoints = [];
+            const cubeSize = 10;
+            const half = cubeSize / 2;
+            const cubeDetail = 20;
+            for (let i = 0; i <= cubeDetail; i++) {
+                for (let j = 0; j <= cubeDetail; j++) {
+                    for (let k = 0; k <= cubeDetail; k++) {
+                        const x = -half + (i / cubeDetail) * cubeSize;
+                        const y = -half + (j / cubeDetail) * cubeSize;
+                        const z = -half + (k / cubeDetail) * cubeSize;
+                        cubePoints.push({ x, y, z });
+                    }
+                }
+            }
+        }
+
+        function rotatePoint(x, y, z, angleX, angleY) {
+            const cosX = Math.cos(angleX);
+            const sinX = Math.sin(angleX);
+            const y1 = y * cosX - z * sinX;
+            const z1 = y * sinX + z * cosX;
+        
+            const cosY = Math.cos(angleY);
+            const sinY = Math.sin(angleY);
+            const x1 = x * cosY - z1 * sinY;
+            const z2 = x * sinY + z1 * cosY;
+        
+            return { x: x1, y: y1, z: z2 };
+        }
+
+        function renderPoints(points) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+
+            const fgColor = isLightMode ? '#000000' : '#FFFFFF';
+            ctx.fillStyle = fgColor;
+
+            const radius = useModel ? maxModelRadius : sphereRadius;
+            for (const point of points) {
+                const rotatedPoint = rotatePoint(
+                    point.x,
+                    point.y,
+                    point.z,
+                    angleX,
+                    angleY
+                );
+
+                const scale = 1 / (rotatedPoint.z + 20);
+                const projectedX = rotatedPoint.x * scale * zoom;
+                const projectedY = rotatedPoint.y * scale * zoom;
+
+                const brightnessIndex = Math.floor(
+                    ((rotatedPoint.z + radius) / (2 * radius)) *
+                    (characters.length - 1)
+                );
+
+                const idx = Math.max(0, Math.min(brightnessIndex, characters.length - 1));
+                const char = characters[idx];
+                ctx.globalAlpha = 0.7;
+                ctx.fillText(char, projectedX, projectedY);
+            }
+
+            ctx.restore();
+        }
+
+        function renderScene() {
+            if (useModel && modelPoints.length > 0) {
+                renderPoints(modelPoints);
+            } else {
+                let points;
+                if (currentShape === 'sphere') {
+                    points = spherePoints;
+                } else {
+                    points = cubePoints;
+                }
+                renderPoints(points);
+            }
+        }
+
+        function animate() {
+            if (!isPaused) {
+                let increment = 0.02 * rotationSpeed; 
+                if (rotationMode === 'left') {
+                    increment = -increment;
+                }
+                angleX += increment;
+                angleY += increment * 1.5;
+                angleZ += increment * 0.5;
+            }
+            renderScene();
+            requestAnimationFrame(animate);
+        }
+
+        canvas.addEventListener('mousedown', (event) => {
+            isDragging = true;
+            lastMouseX = event.clientX;
+            lastMouseY = event.clientY;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (isDragging) {
+                const deltaX = event.clientX - lastMouseX; 
+                const deltaY = event.clientY - lastMouseY; 
+                angleX += deltaY * 0.01; 
+                angleY += deltaX * 0.01; 
+                lastMouseX = event.clientX;
+                lastMouseY = event.clientY;
+                renderScene();
+            }
+        });
+
+        canvas.addEventListener('wheel', (event) => {
+            zoom += event.deltaY * -0.1;
+            zoom = Math.min(Math.max(zoom, 100), 1000);
+            renderScene();
+        });
+
+        pauseButton.addEventListener('click', () => {
+            isPaused = true;
+            pauseButton.disabled = true;
+            resumeButton.disabled = false;
+        });
+
+        resumeButton.addEventListener('click', () => {
+            isPaused = false;
+            pauseButton.disabled = false;
+            resumeButton.disabled = true;
+        });
+
+        speedSlider.addEventListener('input', (event) => {
+            rotationSpeed = parseFloat(event.target.value);
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight - document.getElementById('controls').offsetHeight;
+            renderScene();
+        });
+
+        importButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    parseSTL(data);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        function parseSTL(data) {
+            const text = new TextDecoder().decode(data);
+            if (text.trim().startsWith('solid')) {
+                parseASCIISTL(text);
+            } else {
+                parseBinarySTL(data);
+            }
+        }
+
+        function parseASCIISTL(text) {
+            const vertices = [];
+            const lines = text.split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim().toLowerCase();
+                if (trimmed.startsWith('vertex')) {
+                    const parts = trimmed.split(/\s+/);
+                    if (parts.length === 4) {
+                        const x = parseFloat(parts[1]);
+                        const y = parseFloat(parts[2]);
+                        const z = parseFloat(parts[3]);
+                        vertices.push({x, y, z});
+                    }
+                }
+            }
+            updateModelPoints(vertices);
+        }
+
+        function parseBinarySTL(buffer) {
+            const view = new DataView(buffer.buffer);
+            const numTriangles = view.getUint32(80, true);
+            let offset = 84;
+            const vertices = [];
+            for (let i = 0; i < numTriangles; i++) {
+                offset += 12; // normal
+                for (let v = 0; v < 3; v++) {
+                    const x = view.getFloat32(offset, true); offset += 4;
+                    const y = view.getFloat32(offset, true); offset += 4;
+                    const z = view.getFloat32(offset, true); offset += 4;
+                    vertices.push({x, y, z});
+                }
+                offset += 2; // attribute byte count
+            }
+            updateModelPoints(vertices);
+        }
+
+        function updateModelPoints(vertices) {
+            if (vertices.length === 0) {
+                alert("Unable to load STL or file is empty.");
+                return;
+            }
+
+            let minX = Infinity, maxX = -Infinity,
+                minY = Infinity, maxY = -Infinity,
+                minZ = Infinity, maxZ = -Infinity;
+
+            for (const v of vertices) {
+                if (v.x < minX) minX = v.x;
+                if (v.x > maxX) maxX = v.x;
+                if (v.y < minY) minY = v.y;
+                if (v.y > maxY) maxY = v.y;
+                if (v.z < minZ) minZ = v.z;
+                if (v.z > maxZ) maxZ = v.z;
+            }
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const centerZ = (minZ + maxZ) / 2;
+
+            const sizeX = maxX - minX;
+            const sizeY = maxY - minY;
+            const sizeZ = maxZ - minZ;
+            const maxSize = Math.max(sizeX, sizeY, sizeZ);
+            const scale = (sphereRadius * 2) / maxSize;
+            maxModelRadius = (maxSize / 2) * scale;
+
+            modelPoints = vertices.map(v => ({
+                x: (v.x - centerX) * scale,
+                y: (v.y - centerY) * scale,
+                z: (v.z - centerZ) * scale
+            }));
+
+            useModel = true;
+            renderScene();
+        }
+
+        function resetToShape() {
+            useModel = false;
+            angleX = 0;
+            angleY = 0;
+            angleZ = 0;
+            zoom = initialZoom;
+            rotationSpeed = initialRotationSpeed;
+            speedSlider.value = initialRotationSpeed;
+            isPaused = false;
+            pauseButton.disabled = false;
+            resumeButton.disabled = true;
+            renderScene();
+        }
+
+        resetButton.addEventListener('click', resetToShape);
+
+        function toggleDarkLightMode() {
+            isLightMode = !isLightMode;
+            document.body.classList.toggle('light-mode', isLightMode);
+            renderScene();
+        }
+
+        darkLightButton.addEventListener('click', toggleDarkLightMode);
+
+        directionSelect.addEventListener('change', (event) => {
+            rotationMode = event.target.value;
+        });
+
+        shapeSelect.addEventListener('change', (event) => {
+            currentShape = event.target.value;
+            useModel = false;
+            if (currentShape === 'sphere') {
+                generateSpherePoints();
+            } else {
+                generateCubePoints();
+            }
+            resetToShape();
+        });
+
+        generateSpherePoints();
+        generateCubePoints();
+        animate();
+    </script>
+</body>
+</html>
