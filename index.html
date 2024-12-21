@@ -98,6 +98,38 @@
             overflow: hidden;
         }
 
+        #musicButton {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5); /* Fundo semi-transparente para visibilidade */
+            border: 1px solid white; /* Borda branca para destaque */
+            border-radius: 50%; /* Aparência circular */
+            cursor: pointer;
+            z-index: 1000;
+            outline: none;
+            padding: 5px; /* Espaçamento interno */
+        }
+        
+        #musicButton img {
+            width: 40px;
+            height: 40px;
+        }
+
+        body.light-mode #musicIcon {
+            filter: invert(1); /* Inverte a cor da imagem */
+        }
+
+        #musicButton {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+        }
+
+        img {
+            transition: filter 0.3s ease; /* Suaviza a transição da cor */
+        }
+
     </style>
 </head>
 <body>
@@ -114,10 +146,11 @@
                 <option value="left">Left</option>
             </select>
 
-            <label for="shapeSelect">Shape:</label>
+            <label for="shapeSelect">Shape:</label  >
             <select id="shapeSelect">
                 <option value="sphere" selected>Sphere</option>
                 <option value="cube">Cube</option>
+                <option value="heart">Heart</option>
             </select>
 
             <label>
@@ -131,6 +164,13 @@
         </div>
     </div>
     <div id="author">@Lucasleallopes</div>
+    <button id="musicButton">
+        <img id="musicIcon" src="assets/aumentar-o-volume-branco.png" alt="Play" width="30" height="30">
+    </button>
+    <audio id="backgroundMusic" loop>
+        <source src="/ascci-project/assets/musica.mp3" type="audio/mpeg">
+    </audio>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
 
@@ -213,9 +253,13 @@
         const darkLightButton = document.getElementById('darkLightButton');
         const directionSelect = document.getElementById('directionSelect');
         const shapeSelect = document.getElementById('shapeSelect');
+        const musicButton = document.getElementById('musicButton');
+        const musicIcon = document.getElementById('musicIcon');
+        const backgroundMusic = document.getElementById('backgroundMusic');
 
         let rotationSpeed = 1;
         let isPaused = false;
+        let heartPoints = [];
 
         const initialRotationSpeed = 1;
         const initialZoom = 300;
@@ -228,6 +272,22 @@
         let lastMouseY = 0;
 
         let isLightMode = false; // modo inicial = dark mode
+
+        let isPlaying = false; // Estado inicial
+
+        // Substitua 'sua-musica.mp3' pelo link direto da música ou arquivo local
+        backgroundMusic.src = "/ascci-project/assets/musica.mp3";
+
+        musicButton.addEventListener('click', () => {
+            if (isPlaying) {
+                backgroundMusic.pause();
+                musicIcon.src = "assets/aumentar-o-volume-branco.png"; // Ícone para "play"
+            } else {
+                backgroundMusic.play();
+                musicIcon.src = "assets/diminuir-volume-branco.png"; // Ícone para "pause"
+            }
+            isPlaying = !isPlaying; // Alterna o estado
+        });
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight - document.getElementById('controls').offsetHeight;
@@ -260,6 +320,21 @@
             }
         }
 
+        function generateHeartPoints() {
+            heartPoints = [];
+            const scale = 10; // Tamanho do coração
+            const detail = 40; // Quantidade de pontos
+        
+            for (let t = 0; t <= Math.PI * 2; t += Math.PI / detail) {
+                for (let phi = -Math.PI / 2; phi <= Math.PI / 2; phi += Math.PI / detail) {
+                    const x = scale * 16 * Math.pow(Math.sin(t), 3);
+                    const y = scale * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+                    const z = scale * Math.sin(phi) * Math.cos(t);
+                    // Ajuste para centralizar o coração
+                    heartPoints.push({ x: x / 10, y: y / 10, z: z / 10 });
+                }
+            }
+        }
         function generateCubePoints() {
             cubePoints = [];
             const cubeSize = 10;
@@ -334,12 +409,15 @@
                 let points;
                 if (currentShape === 'sphere') {
                     points = spherePoints;
-                } else {
+                } else if (currentShape === 'cube') {
                     points = cubePoints;
+                } else if (currentShape === 'heart') {
+                    points = heartPoints; // Aqui adiciona os pontos do coração
                 }
                 renderPoints(points);
             }
         }
+        
 
         function animate() {
             if (!isPaused) {
@@ -530,6 +608,10 @@
 
         darkLightButton.addEventListener('click', toggleDarkLightMode);
 
+        darkLightButton.addEventListener('click', () => {
+            body.classList.toggle('light-mode');
+        });
+
         directionSelect.addEventListener('change', (event) => {
             rotationMode = event.target.value;
         });
@@ -539,8 +621,10 @@
             useModel = false;
             if (currentShape === 'sphere') {
                 generateSpherePoints();
-            } else {
+            } else if (currentShape === 'cube') {
                 generateCubePoints();
+            } else if (currentShape === 'heart') {
+                generateHeartPoints();
             }
             resetToShape();
         });
