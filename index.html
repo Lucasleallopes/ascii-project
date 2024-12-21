@@ -151,6 +151,7 @@
                 <option value="sphere" selected>Sphere</option>
                 <option value="cube">Cube</option>
                 <option value="heart">Heart</option>
+                <option value="hexagon">Hexagon</option> <!-- Nova opção -->
             </select>
 
             <label>
@@ -296,6 +297,7 @@
 
         let spherePoints = [];
         let cubePoints = [];
+        let hexagonPoints = [];
         let modelPoints = [];
         let useModel = false; 
         let currentShape = 'sphere';
@@ -352,6 +354,77 @@
             }
         }
 
+    // Exemplo de implementação para gerar pontos de um prisma hexagonal
+    function generateHexagonPoints() {
+        hexagonPoints = [];
+    
+        const sides = 6; // Número de lados do hexágono
+        const radius = 10; // Raio do hexágono
+        const height = 10; // Altura do prisma
+        const segments = 50; // Número de segmentos para conectar os pontos
+    
+        // Pontos das bases superior e inferior
+        const topBase = [];
+        const bottomBase = [];
+    
+        for (let i = 0; i < sides; i++) {
+            const angle = (i / sides) * 2 * Math.PI;
+            const x = radius * Math.cos(angle);
+            const z = radius * Math.sin(angle);
+            topBase.push({ x, y: height / 2, z });
+            bottomBase.push({ x, y: -height / 2, z });
+        }
+    
+        // Fechando as bases (adicionando o primeiro ponto no final para fechamento)
+        topBase.push(topBase[0]);
+        bottomBase.push(bottomBase[0]);
+    
+        // Adicionar linhas conectando as bases
+        function interpolatePoints(point1, point2, numSegments) {
+            const points = [];
+            for (let i = 0; i <= numSegments; i++) {
+                const t = i / numSegments;
+                const x = point1.x + t * (point2.x - point1.x);
+                const y = point1.y + t * (point2.y - point1.y);
+                const z = point1.z + t * (point2.z - point1.z);
+                points.push({ x, y, z });
+            }
+            return points;
+        }
+    
+        // Conectar faces laterais e adicionar detalhes
+        for (let i = 0; i < sides; i++) {
+            const top1 = topBase[i];
+            const top2 = topBase[i + 1];
+            const bottom1 = bottomBase[i];
+            const bottom2 = bottomBase[i + 1];
+    
+            // Interpolação para as arestas verticais
+            hexagonPoints.push(...interpolatePoints(top1, bottom1, segments));
+            hexagonPoints.push(...interpolatePoints(top2, bottom2, segments));
+    
+            // Interpolação para as arestas superiores e inferiores
+            hexagonPoints.push(...interpolatePoints(top1, top2, segments));
+            hexagonPoints.push(...interpolatePoints(bottom1, bottom2, segments));
+        }
+    
+        // Criar as tampas superior e inferior
+        const centerTop = { x: 0, y: height / 2, z: 0 }; // Centro da base superior
+        const centerBottom = { x: 0, y: -height / 2, z: 0 }; // Centro da base inferior
+    
+        for (let i = 0; i < sides; i++) {
+            const top1 = topBase[i];
+            const top2 = topBase[i + 1];
+            const bottom1 = bottomBase[i];
+            const bottom2 = bottomBase[i + 1];
+    
+            // Interpolação para as tampas superior e inferior
+            hexagonPoints.push(...interpolatePoints(centerTop, top1, segments));
+            hexagonPoints.push(...interpolatePoints(centerTop, top2, segments));
+            hexagonPoints.push(...interpolatePoints(centerBottom, bottom1, segments));
+            hexagonPoints.push(...interpolatePoints(centerBottom, bottom2, segments));
+        }
+    }
         function rotatePoint(x, y, z, angleX, angleY) {
             const cosX = Math.cos(angleX);
             const sinX = Math.sin(angleX);
@@ -412,12 +485,13 @@
                 } else if (currentShape === 'cube') {
                     points = cubePoints;
                 } else if (currentShape === 'heart') {
-                    points = heartPoints; // Aqui adiciona os pontos do coração
+                    points = heartPoints;
+                } else if (currentShape === 'hexagon') {
+                    points = hexagonPoints;
                 }
                 renderPoints(points);
             }
         }
-        
 
         function animate() {
             if (!isPaused) {
@@ -625,6 +699,8 @@
                 generateCubePoints();
             } else if (currentShape === 'heart') {
                 generateHeartPoints();
+            } else if (currentShape === 'hexagon') {
+                generateHexagonPoints();
             }
             resetToShape();
         });
@@ -707,6 +783,7 @@
 
         generateSpherePoints();
         generateCubePoints();
+        generateHexagonPoints();
         animate();
     </script>
 </body>
