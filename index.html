@@ -146,12 +146,20 @@
                 <option value="left">Left</option>
             </select>
 
+            <button id="changeColorButton">Change Color</button>
+            <input type="color" id="colorPicker" style="display: none;">
+
+            <button id="textColorButton">Text Color</button>
+            <input type="color" id="textColorPicker" style="display: none;">
+
             <label for="shapeSelect">Shape:</label  >
             <select id="shapeSelect">
                 <option value="sphere" selected>Sphere</option>
                 <option value="cube">Cube</option>
+                <option value="pyramid">Pyramid</option>
+                <option value="hexagon">Hexagon</option>
                 <option value="heart">Heart</option>
-                <option value="hexagon">Hexagon</option> <!-- Nova opção -->
+                <option value="compassRose">Compass Rose</option>
             </select>
 
             <label>
@@ -175,7 +183,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
 
-         // Criação do elemento para o Three.js renderizar
+    // Criação do elemento para o Three.js renderizar
     const particlesContainer = document.createElement('div');
     particlesContainer.style.position = 'absolute';
     particlesContainer.style.top = '0';
@@ -184,6 +192,20 @@
     particlesContainer.style.height = '100%';
     particlesContainer.style.zIndex = '-1'; // Mantém atrás do ASCII canvas
     document.getElementById('asciiContainer').appendChild(particlesContainer);
+
+    const changeColorButton = document.getElementById('changeColorButton');
+    const colorPicker = document.getElementById('colorPicker');
+
+    changeColorButton.addEventListener('click', () => {
+        colorPicker.click(); // Simula o clique no input de cor
+    });
+
+    colorPicker.addEventListener('input', (event) => {
+        const selectedColor = event.target.value; // Obtém a cor selecionada
+        if (particles && particles.material) {
+            particles.material.color.set(selectedColor); // Atualiza a cor do material
+        }
+    });
 
     // Configuração do Three.js para partículas
     let scene, camera, renderer, particles;
@@ -276,7 +298,22 @@
 
         let isPlaying = false; // Estado inicial
 
-        // Substitua 'sua-musica.mp3' pelo link direto da música ou arquivo local
+        const textColorButton = document.getElementById('textColorButton');
+        const textColorPicker = document.getElementById('textColorPicker');
+        let currentTextColor = isLightMode ? '#000000' : '#FFFFFF';
+        let isCustomColor = false;
+
+        // Event listeners para controle de cor do texto
+        textColorButton.addEventListener('click', () => {
+            textColorPicker.click();
+        });
+
+        textColorPicker.addEventListener('input', (e) => {
+            currentTextColor = e.target.value;
+            isCustomColor = true;
+            renderScene();
+        });
+
         backgroundMusic.src = "/ascci-project/assets/musica.mp3";
 
         musicButton.addEventListener('click', () => {
@@ -299,6 +336,8 @@
         let cubePoints = [];
         let hexagonPoints = [];
         let modelPoints = [];
+        const pyramidPoints = [];
+        const compassPoints = [];
         let useModel = false; 
         let currentShape = 'sphere';
 
@@ -425,6 +464,178 @@
             hexagonPoints.push(...interpolatePoints(centerBottom, bottom2, segments));
         }
     }
+
+    function generatePyramidPoints() {
+        //const pyramidPoints = [];
+        const baseSize = 10; // Tamanho da base da pirâmide
+        const height = 15; // Altura da pirâmide
+        const segments = 50; // Número de segmentos para interpolação
+    
+        // Define os vértices da base
+        const halfBase = baseSize / 2;
+        const baseVertices = [
+            { x: -halfBase, y: -height / 2, z: -halfBase }, // Inferior esquerdo
+            { x: halfBase, y: -height / 2, z: -halfBase },  // Inferior direito
+            { x: halfBase, y: -height / 2, z: halfBase },   // Superior direito
+            { x: -halfBase, y: -height / 2, z: halfBase }  // Superior esquerdo
+        ];
+    
+        // Define o vértice do topo
+        const apex = { x: 0, y: height / 2, z: 0 };
+    
+        // Função para interpolar pontos entre dois vértices
+        function interpolatePoints(point1, point2, numSegments) {
+            const points = [];
+            for (let i = 0; i <= numSegments; i++) {
+                const t = i / numSegments;
+                const x = point1.x + t * (point2.x - point1.x);
+                const y = point1.y + t * (point2.y - point1.y);
+                const z = point1.z + t * (point2.z - point1.z);
+                points.push({ x, y, z });
+            }
+            return points;
+        }
+    
+        // Conectar a base da pirâmide
+        for (let i = 0; i < baseVertices.length; i++) {
+            const currentVertex = baseVertices[i];
+            const nextVertex = baseVertices[(i + 1) % baseVertices.length];
+            pyramidPoints.push(...interpolatePoints(currentVertex, nextVertex, segments));
+        }
+    
+        // Conectar as arestas da base ao vértice do topo
+        for (const baseVertex of baseVertices) {
+            pyramidPoints.push(...interpolatePoints(baseVertex, apex, segments  ));
+        }
+    
+        return pyramidPoints;
+    }
+    //rosa dos venntos antigo
+    function generateCompassRosePoints() {
+        //const compassPoints = [];
+        const center = { x: 0, y: 0 }; // Centro da rosa dos ventos
+        const radius = 20; // Raio das linhas
+        const segments = 50; // Número de segmentos por linha
+        const directions = [
+            { angle: 0, label: 'E' },    // Leste (0°)
+            { angle: Math.PI / 4, label: 'NE' },  // Nordeste (45°)
+            { angle: Math.PI / 2, label: 'N' },   // Norte (90°)
+            { angle: (3 * Math.PI) / 4, label: 'NO' },  // Noroeste (135°)
+            { angle: Math.PI, label: 'O' },       // Oeste (180°)
+            { angle: (5 * Math.PI) / 4, label: 'SO' },  // Sudoeste (225°)
+            { angle: (3 * Math.PI) / 2, label: 'S' },   // Sul (270°)
+            { angle: (7 * Math.PI) / 4, label: 'SE' }   // Sudeste (315°)
+        ];
+    
+        // Função para interpolar pontos ao longo de uma linha
+        function interpolatePoints(point1, point2, numSegments) {
+            const points = [];
+            for (let i = 0; i <= numSegments; i++) {
+                const t = i / numSegments;
+                const x = point1.x + t * (point2.x - point1.x);
+                const y = point1.y + t * (point2.y - point1.y);
+                points.push({ x, y });
+            }
+            return points;
+        }
+    
+        // Gerar os pontos das linhas principais
+        for (const dir of directions) {
+            const endX = radius * Math.cos(dir.angle);
+            const endY = radius * Math.sin(dir.angle);
+            const endPoint = { x: endX, y: endY };
+            compassPoints.push(...interpolatePoints(center, endPoint, segments));
+        }
+    
+        // Adicionar os rótulos dos pontos cardeais no final das linhas
+        directions.forEach((dir) => {
+            const labelX = (radius + 2) * Math.cos(dir.angle); // Posição além da linha
+            const labelY = (radius + 2) * Math.sin(dir.angle);
+            compassPoints.push({ x: labelX, y: labelY, label: dir.label });
+        });
+    
+        return compassPoints;
+    }
+         /* function generateCompassRosePoints() {
+            // Limpa array antigo
+            compassPoints = [];
+    
+            // 16 direções (ângulo em graus, partindo do topo(N), sentido horário)
+            // Observação: 0° = N (topo); 90° = E (direita); 180° = S (baixo); 270° = O (esquerda)
+            const directions = [
+                { angleDeg: 0,    label: 'N'   },  // Norte
+                { angleDeg: 22.5, label: 'NNE' },
+                { angleDeg: 45,   label: 'NE'  },
+                { angleDeg: 67.5, label: 'ENE' },
+                { angleDeg: 90,   label: 'E'   },  // Leste
+                { angleDeg: 112.5,label: 'ESE' },
+                { angleDeg: 135,  label: 'SE'  },
+                { angleDeg: 157.5,label: 'SSE' },
+                { angleDeg: 180,  label: 'S'   },  // Sul
+                { angleDeg: 202.5,label: 'SSW' },
+                { angleDeg: 225,  label: 'SW'  },
+                { angleDeg: 247.5,label: 'WSW' },
+                { angleDeg: 270,  label: 'O'   },  // Oeste
+                { angleDeg: 292.5,label: 'ONO' },
+                { angleDeg: 315,  label: 'NW'  },
+                { angleDeg: 337.5,label: 'NNW' },
+            ];
+    
+            // Definir raio maior (cardeais), raio intermediário e menor
+            const cardinalRadius = 12;
+            const mainDiagRadius = 10;
+            const secondaryRadius = 8;
+            
+            function getLineRadius(dir) {
+                // Cardeais
+                if (['N','S','E','O'].includes(dir)) return cardinalRadius;
+                // Intercardeais "principais" (NE, SE, SW, NW)
+                if (['NE','SE','SW','NW'].includes(dir)) return mainDiagRadius;
+                // Demais (NNE, ENE, SSE, ESE, SSW, WSW, NNW, ONO)
+                return secondaryRadius;
+            }
+    
+            // Quantos pontos interpolar em cada linha
+            const segments = 30;
+            
+            function interpolatePoints2D(p1, p2, numSegments, label) {
+                const pts = [];
+                for (let i = 0; i <= numSegments; i++) {
+                    const t = i / numSegments;
+                    const x = p1.x + t * (p2.x - p1.x);
+                    const y = p1.y + t * (p2.y - p1.y);
+                    pts.push({ x, y, z: 0 }); // z=0 para rodar em "2D" no espaço 3D
+                }
+                // Se houver label, adiciona um ponto "final" com a propriedade de label
+                if (label) {
+                    // O label vai além do final da linha, para não sobrepor o caractere final
+                    // Ex: 1.2 * (ponto final)
+                    const labelX = p2.x * 1.2;
+                    const labelY = p2.y * 1.2;
+                    pts.push({ x: labelX, y: labelY, z: 0, label }); 
+                }
+                return pts;
+            }
+    
+            // Centro (0,0)
+            const center = { x: 0, y: 0 };
+    
+            // Para cada direção, gera linha do centro até o raio definido
+            directions.forEach(dir => {
+                const angleRad = (dir.angleDeg * Math.PI) / 180;
+                const lineRadius = getLineRadius(dir.label);
+    
+                // Ajuste: 0° = topo => x=0, y=-lineRadius (pois canvas cresce pra baixo)
+                const endX = lineRadius * Math.sin(angleRad);
+                const endY = -lineRadius * Math.cos(angleRad);
+    
+                const endPoint = { x: endX, y: endY };
+                const linePoints = interpolatePoints2D(center, endPoint, segments, dir.label);
+                compassPoints.push(...linePoints);
+            });
+            return compassPoints;
+        }
+    */
         function rotatePoint(x, y, z, angleX, angleY) {
             const cosX = Math.cos(angleX);
             const sinX = Math.sin(angleX);
@@ -443,35 +654,49 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.translate(canvas.width / 2, canvas.height / 2);
-
+        
             const fgColor = isLightMode ? '#000000' : '#FFFFFF';
-            ctx.fillStyle = fgColor;
-
-            const radius = useModel ? maxModelRadius : sphereRadius;
+            ctx.fillStyle = currentTextColor;
+        
             for (const point of points) {
-                const rotatedPoint = rotatePoint(
-                    point.x,
-                    point.y,
-                    point.z,
-                    angleX,
-                    angleY
-                );
 
-                const scale = 1 / (rotatedPoint.z + 20);
-                const projectedX = rotatedPoint.x * scale * zoom;
-                const projectedY = rotatedPoint.y * scale * zoom;
+                            // Rotaciona em 3D
+            const rotated = rotatePoint(point.x, point.y, point.z || 0, angleX, angleY);
 
-                const brightnessIndex = Math.floor(
-                    ((rotatedPoint.z + radius) / (2 * radius)) *
-                    (characters.length - 1)
-                );
-
-                const idx = Math.max(0, Math.min(brightnessIndex, characters.length - 1));
-                const char = characters[idx];
-                ctx.globalAlpha = 0.7;
-                ctx.fillText(char, projectedX, projectedY);
+            // Projeção simples (perspectiva "fake")
+            const scale = 1 / (rotated.z + 20); 
+            const projectedX = rotated.x * scale * zoom;
+            const projectedY = rotated.y * scale * zoom;
+                if (point.label) {
+                    // Renderiza rótulos (para a rosa dos ventos, por exemplo)
+                    ctx.font = '14px Courier New'; // Ajusta o tamanho da fonte
+                    ctx.fillText(point.label, point.x * zoom, point.y * zoom);
+                } else {
+                    // Renderiza pontos regulares
+                    const rotatedPoint = rotatePoint(
+                        point.x,
+                        point.y,
+                        point.z || 0, // Para formas 2D, z é opcional
+                        angleX,
+                        angleY
+                    );
+        
+                    const scale = 1 / (rotatedPoint.z + 20);
+                    const projectedX = rotatedPoint.x * scale * zoom;
+                    const projectedY = rotatedPoint.y * scale * zoom;
+        
+                    const brightnessIndex = Math.floor(
+                        ((rotatedPoint.z + (sphereRadius || 1)) / (2 * (sphereRadius || 1))) *
+                        (characters.length - 1)
+                    );
+        
+                    const idx = Math.max(0, Math.min(brightnessIndex, characters.length - 1));
+                    const char = characters[idx];
+                    ctx.globalAlpha = 0.7;
+                    ctx.fillText(char, projectedX, projectedY);
+                }
             }
-
+        
             ctx.restore();
         }
 
@@ -488,8 +713,12 @@
                     points = heartPoints;
                 } else if (currentShape === 'hexagon') {
                     points = hexagonPoints;
+                } else if (currentShape === 'pyramid') { // Adiciona a pirâmide como opção
+                    points = pyramidPoints;
+                } else if (currentShape === 'compassRose') {
+                    points = compassPoints;
                 }
-                renderPoints(points);
+                renderPoints(points);   
             }
         }
 
@@ -669,6 +898,10 @@
             isPaused = false;
             pauseButton.disabled = false;
             resumeButton.disabled = true;
+            
+            isCustomColor = false;
+            currentTextColor = isLightMode ? '#000000' : '#FFFFFF';
+            
             renderScene();
         }
 
@@ -677,6 +910,9 @@
         function toggleDarkLightMode() {
             isLightMode = !isLightMode;
             document.body.classList.toggle('light-mode', isLightMode);
+            if (!isCustomColor) {
+                currentTextColor = isLightMode ? '#000000' : '#FFFFFF';
+            }
             renderScene();
         }
 
@@ -701,9 +937,26 @@
                 generateHeartPoints();
             } else if (currentShape === 'hexagon') {
                 generateHexagonPoints();
+            } else if (currentShape === 'pyramid') { // Adiciona a pirâmide como opção
+                pyramidPoints = generatePyramidPoints();
+            } else if (currentShape === 'compassRose') {
+                compassPoints = generateCompassRosePoints();
             }
+
+            if (currentShape !== 'compassRose') { // Exemplo: não aplicar a pirâmide
+                renderScene(); 
+            } else {
+                // Atualiza apenas o necessário para o novo shape
+                generateCompassRosePoints();
+            }
+
             resetToShape();
+
+            if (isCustomColor) {
+                ctx.fillStyle = currentTextColor; // Mantém a cor escolhida
+            }
         });
+        
 
         canvas.addEventListener('touchstart', (event) => {
             // Prevent default touch behavior to prevent scrolling while interacting
